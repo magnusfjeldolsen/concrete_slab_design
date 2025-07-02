@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Structural Calculation PDF</title>
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+<style>
+  body { font-family: 'Times New Roman', serif; margin: 2em; }
+  label { display: inline-block; width: 150px; margin-top: 0.5em; }
+  input { width: 100px; }
+  #results { margin-top: 2em; border: 1px solid #ccc; padding: 1em; background: #f9f9f9; }
+  .formula { margin: 1em 0; font-size: 1.2em; }
+</style>
+</head>
+<body>
+
+<h2>Structural Calculation Input</h2>
+
+<form id="calc-form" onsubmit="event.preventDefault(); calculateAndShow();">
+  <label for="MEd">M<sub>Ed</sub> (kNm):</label>
+  <input type="number" id="MEd" step="any" required><br />
+
+  <label for="t">t (mm):</label>
+  <input type="number" id="t" step="any" required><br />
+
+  <label for="fcd">f<sub>cd</sub> (MPa):</label>
+  <input type="number" id="fcd" step="any" required><br />
+
+  <label for="c">c (cover, mm):</label>
+  <input type="number" id="c" step="any" required><br />
+
+  <label for="phi_l">φ<sub>l</sub> (mm):</label>
+  <input type="number" id="phi_l" step="any" required><br />
+
+  <label for="cc_l">cc<sub>l</sub> (center spacing, mm):</label>
+  <input type="number" id="cc_l" step="any" required><br />
+
+  <label for="fyd">f<sub>yd</sub> (MPa):</label>
+  <input type="number" id="fyd" step="any" required><br />
+
+  <button type="submit">Calculate</button>
+</form>
+
+<div id="results" style="display:none;">
+  <h3>Calculation steps:</h3>
+  <div id="calc-steps"></div>
+  <button onclick="window.print()">Print PDF</button>
+</div>
+
+<script>
+function toFixedIfNeeded(num, digits=3) {
+  return Number.isInteger(num) ? num.toString() : num.toFixed(digits);
+}
+
+function calculateAndShow() {
+  // Get inputs
+  const MEd = parseFloat(document.getElementById('MEd').value);
+  const t = parseFloat(document.getElementById('t').value);
+  const fcd = parseFloat(document.getElementById('fcd').value);
+  const c = parseFloat(document.getElementById('c').value);
+  const phi_l = parseFloat(document.getElementById('phi_l').value);
+  const cc_l = parseFloat(document.getElementById('cc_l').value);
+  const fyd = parseFloat(document.getElementById('fyd').value);
+
+  // Step 1: d = t - c - phi_l/2
+  const d = t - c - phi_l/2;
+
+  // Step 2: As = π * phi_l^2 / 4 * 1000 / cc_l
+  const As = (Math.PI * Math.pow(phi_l, 2) / 4) * 1000 / cc_l;
+
+  // Step 3: MRd,c = 0.275 * 1000 * d^2 * fcd
+  const MRd_c = 0.275 * 1000 * d * d * fcd;
+
+  // Step 4: z = max(0.95 * d, d * (1 - 0.17 * MEd / MRd_c))
+  const z1 = 0.95 * d;
+  const z2 = d * (1 - 0.17 * MEd / MRd_c);
+  const z = Math.max(z1, z2);
+
+  // Step 5: MRd,s = As * fyd * z
+  const MRd_s = As * fyd * z;
+
+  // Step 6: MRd = min(MRd,c, MRd,s)
+  const MRd = Math.min(MRd_c, MRd_s);
+
+  // Compose LaTeX output with substituted values
+  const stepsLatex = `
+  \\[
+  \\begin{aligned}
+  & d = t - c - \\frac{\\phi_l}{2} = ${toFixedIfNeeded(t)} - ${toFixedIfNeeded(c)} - \\frac{${toFixedIfNeeded(phi_l)}}{2} = ${toFixedIfNeeded(d)} \\ \\mathrm{mm} \\\\
+  & A_s = \\frac{\\pi \\times \\phi_l^2}{4} \\times \\frac{1000}{cc_l} = \\frac{\\pi \\times (${toFixedIfNeeded(phi_l)})^2}{4} \\times \\frac{1000}{${toFixedIfNeeded(cc_l)}} = ${toFixedIfNeeded(As)} \\ \\mathrm{mm}^2 \\\\
+  & M_{Rd,c} = 0.275 \\times 1000 \\times d^2 \\times f_{cd} = 0.275 \\times 1000 \\times (${toFixedIfNeeded(d)})^2 \\times ${toFixedIfNeeded(fcd)} = ${toFixedIfNeeded(MRd_c)} \\ \\mathrm{Nm} \\\\
+  & z = \\max\\left(0.95 d, d \\times \\left(1 - 0.17 \\times \\frac{M_{Ed}}{M_{Rd,c}} \\right) \\right) = \\max\\left(${toFixedIfNeeded(z1)}, ${toFixedIfNeeded(z2)} \\right) = ${toFixedIfNeeded(z)} \\ \\mathrm{mm} \\\\
+  & M_{Rd,s} = A_s \\times f_{yd} \\times z = ${toFixedIfNeeded(As)} \\times ${toFixedIfNeeded(fyd)} \\times ${toFixedIfNeeded(z)} = ${toFixedIfNeeded(MRd_s)} \\ \\mathrm{Nm} \\\\
+  & M_{Rd} = \\min\\left(M_{Rd,c}, M_{Rd,s} \\right) = \\min\\left(${toFixedIfNeeded(MRd_c)}, ${toFixedIfNeeded(MRd_s)} \\right) = ${toFixedIfNeeded(MRd)} \\ \\mathrm{Nm}
+  \\end{aligned}
+  \\]
+  `;
+
+  const container = document.getElementById('calc-steps');
+  container.innerHTML = stepsLatex;
+  document.getElementById('results').style.display = 'block';
+
+  // Typeset math with MathJax
+  MathJax.typesetPromise();
+}
+</script>
+
+</body>
+</html>
